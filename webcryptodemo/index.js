@@ -18,15 +18,17 @@ const html = `<!DOCTYPE html>
               <input type="text" id="rsassa-pkcs1-message" name="message" size="25"
                      value="The owl hoots at midnight">
             </div>
-            <div class="signature">Signature:<span class="signature-value"></span></div>
-            <input class="sign-button" type="button" value="Sign" onclick='callSignMessage()'>
-            <input class="verify-button" type="button" value="Verify" onclick='callVerifyMessage()'>
+            <div id="signature">Signature:<span id="signature-value"></span></div>
+            <input id="sign-button" type="button" value="Sign" onclick='callSignMessage()'>
+            <input id="verify-button" type="button" value="Verify" onclick='callVerifyMessage()'>
           </section>
         </section>
   </body>
   <script> function callSignMessage() {
       fetch(window.location.pathname, {
           method: 'POST',
+          headers: {'Content-Type': 'json'},
+          body: "foobar"
       })
   }
   function callVerifyMessage() {
@@ -37,6 +39,27 @@ const html = `<!DOCTYPE html>
   </script>
 </html>`
 
+class CryptoElemHandler {
+  constructor(keyPair) {
+    this.keyPair = keyPair
+  }
+
+  element(element) {
+    if(element.getAttribute('id') == 'sign-button' ){
+      console.log("sign spot")
+    }
+    else if(element.getAttribute('id') == 'verify-button' ){
+      console.log("verify spot")
+    }
+    else if(element.getAttribute("id") == "signature-value") {
+      console.log("sigvalue")
+    }
+    else if(element.getAttribute("id") == "rsassa-pkcs1-message"){
+      //any way to do this?
+      console.log(element.value)
+    }
+  }
+}
 
 function signMessage(privateKey) {
   console.log(privateKey)
@@ -50,12 +73,11 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
-/**
- * Respond to the request
- * @param {Request} request
- */
-async function handleRequest(request) {
 
+async function handleRequest(request) {
+  let rewriter = new HTMLRewriter();
+  let response = new Response(html, {
+    headers: {'Content-Type': `text/html`}})
   let keyPair = await self.crypto.subtle.generateKey(
       {
         name: "RSASSA-PKCS1-v1_5",
@@ -69,13 +91,17 @@ async function handleRequest(request) {
   );
 
   if (request.method == 'POST') {
-    response = await signMessage(keyPair.privateKey);
+    console.log('POST call', request.body)
+    await signMessage(keyPair.privateKey);
+    return rewriter.on("*", new CryptoElemHandler())
+        .transform(response)
+
   }
   if (request.method == 'PUT') {
-    response = await verifyMessage(keyPair.privateKey)
+    await verifyMessage(keyPair.privateKey)
+    return rewriter.on("*#verify-button", new CryptoElemHandler())
+        .transform(response)
   }
 
-  return new Response(html, {
-    headers: {'Content-Type': `text/html`}
-  })
+  return response
 }
