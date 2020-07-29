@@ -44,6 +44,10 @@ const html = `<!DOCTYPE html>
   </script>
 </html>`
 
+let signature;
+//very sketchy, global variable
+
+
 class CryptoElemHandler {
   constructor(keyPair, rawMessage) {
     this.keyPair = keyPair
@@ -70,8 +74,16 @@ class CryptoElemHandler {
   }
 }
 
-function signMessage(privateKey) {
-  console.log(privateKey)
+async function signMessage(rawMessage, privateKey) {
+  let enc = new TextEncoder();
+  let encoded = enc.encode(rawMessage);
+  signature = await self.crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      privateKey,
+      encoded
+  );
+  let buffer = new Uint8Array(signature, 0, 5);
+  return `${buffer}...[${signature.byteLength} bytes total]`;
 }
 
 function verifyMessage(publicKey) {
@@ -100,9 +112,9 @@ async function handleRequest(request) {
   );
 
   if (request.method == 'POST') {
-    let bodytxt = await request.text()
-    console.log(bodytxt)
-    let response = new Response("worker gives this to client", )
+    let rawMessage = await request.text()
+    let signature = await signMessage(rawMessage, keyPair.privateKey)
+    let response = new Response(signature)
     return response
   }
   if (request.method == 'PUT') {
