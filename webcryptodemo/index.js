@@ -25,11 +25,16 @@ const html = `<!DOCTYPE html>
         </section>
   </body>
   <script> function callSignMessage() {
+      var messagetxt = document.getElementById("rsassa-pkcs1-message").value;
       fetch(window.location.pathname, {
           method: 'POST',
-          headers: {'Content-Type': 'json'},
-          body: "foobar"
-      })
+          headers: {'Content-Type': 'html/text'},
+          body: messagetxt
+      }).then(response => { response.text() .then(text => {
+        let sigfield = document.getElementById("signature-value")
+        sigfield.innerText = text
+      }) })
+     
   }
   function callVerifyMessage() {
     fetch(window.location.pathname, {
@@ -40,8 +45,9 @@ const html = `<!DOCTYPE html>
 </html>`
 
 class CryptoElemHandler {
-  constructor(keyPair) {
+  constructor(keyPair, rawMessage) {
     this.keyPair = keyPair
+    this.rawMessage = rawMessage
   }
 
   element(element) {
@@ -52,11 +58,14 @@ class CryptoElemHandler {
       console.log("verify spot")
     }
     else if(element.getAttribute("id") == "signature-value") {
-      console.log("sigvalue")
-    }
-    else if(element.getAttribute("id") == "rsassa-pkcs1-message"){
-      //any way to do this?
-      console.log(element.value)
+      if(this.rawMessage){
+        console.log("have message")
+        element.setInnerContent(this.rawMessage)
+      }
+      else {
+        console.log('dont have message')
+      }
+
     }
   }
 }
@@ -91,17 +100,18 @@ async function handleRequest(request) {
   );
 
   if (request.method == 'POST') {
-    console.log('POST call', request.body)
-    await signMessage(keyPair.privateKey);
-    return rewriter.on("*", new CryptoElemHandler())
-        .transform(response)
-
+    let bodytxt = await request.text()
+    console.log(bodytxt)
+    let response = new Response("worker gives this to client", )
+    return response
   }
   if (request.method == 'PUT') {
+
     await verifyMessage(keyPair.privateKey)
-    return rewriter.on("*#verify-button", new CryptoElemHandler())
+    response =  rewriter.on("*#verify-button", new CryptoElemHandler())
         .transform(response)
   }
 
-  return response
+  return rewriter.on("*", new CryptoElemHandler(keyPair, ))
+      .transform(response)
 }
