@@ -28,7 +28,7 @@ const html = `<!DOCTYPE html>
       var messagetxt = document.getElementById("rsassa-pkcs1-message").value;
       fetch(window.location.pathname, {
           method: 'POST',
-          headers: {'Content-Type': 'html/text'},
+          headers: {'Content-Type': 'text'},
           body: messagetxt
       }).then(response => { response.text() .then(text => {
         let sigfield = document.getElementById("signature-value")
@@ -38,56 +38,44 @@ const html = `<!DOCTYPE html>
   }
   function callVerifyMessage() {
     fetch(window.location.pathname, {
-        method: 'PUT',
-    })
+        method: 'PUT'
+    }).then(response => { response.text() .then(text => {
+        let sigfield = document.getElementById("signature-value")
+        sigfield.innerText = text
+      }) })
   }
   </script>
 </html>`
 
 let signature;
 //very sketchy, global variable
+let rawMessage;
+//this should be factor-out-able to save in client, but im lazy
 
 
-class CryptoElemHandler {
-  constructor(keyPair, rawMessage) {
-    this.keyPair = keyPair
-    this.rawMessage = rawMessage
-  }
 
-  element(element) {
-    if(element.getAttribute('id') == 'sign-button' ){
-      console.log("sign spot")
-    }
-    else if(element.getAttribute('id') == 'verify-button' ){
-      console.log("verify spot")
-    }
-    else if(element.getAttribute("id") == "signature-value") {
-      if(this.rawMessage){
-        console.log("have message")
-        element.setInnerContent(this.rawMessage)
-      }
-      else {
-        console.log('dont have message')
-      }
-
-    }
-  }
-}
-
-async function signMessage(rawMessage, privateKey) {
+async function signMessage(hmacKey) {
   let enc = new TextEncoder();
   let encoded = enc.encode(rawMessage);
-  signature = await self.crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      privateKey,
+  let signature = await self.crypto.subtle.sign(
+      "HMAC",
+      hmacKey,
       encoded
   );
-  let buffer = new Uint8Array(signature, 0, 5);
-  return `${buffer}...[${signature.byteLength} bytes total]`;
+  return signature;
 }
 
-function verifyMessage(publicKey) {
-  console.log(publicKey)
+async function verifyMessage(hmacKey) {
+  console.log(signature)
+  let enc = new TextEncoder();
+  let encoded = enc.encode(rawMessage);
+  let result = await self.crypto.subtle.verify(
+      "HMAC",
+      hmacKey,
+      signature,
+      encoded
+  );
+  return result;
 }
 
 addEventListener('fetch', event => {
@@ -96,34 +84,26 @@ addEventListener('fetch', event => {
 
 
 async function handleRequest(request) {
-  let rewriter = new HTMLRewriter();
-  let response = new Response(html, {
-    headers: {'Content-Type': `text/html`}})
-  let keyPair = await self.crypto.subtle.generateKey(
+  let key = await self.crypto.subtle.generateKey(
       {
-        name: "RSASSA-PKCS1-v1_5",
-        // Consider using a 4096-bit key for systems that require long-term security
-        modulusLength: 512,
-        publicExponent: new Uint8Array([1, 0, 1]),
-        hash: "SHA-256",
+        name: "HMAC",
+        hash: "sha-256"
       },
       true,
       ["sign", "verify"]
   );
 
   if (request.method == 'POST') {
-    let rawMessage = await request.text()
-    let signature = await signMessage(rawMessage, keyPair.privateKey)
-    let response = new Response(signature)
-    return response
+    rawMessage = await request.text()
+    let signature = await signMessage(key)
+    return new Response(signature)
   }
   if (request.method == 'PUT') {
-
-    await verifyMessage(keyPair.privateKey)
-    response =  rewriter.on("*#verify-button", new CryptoElemHandler())
-        .transform(response)
+    console.log(signature)
+    let result = await verifyMessage(key)
+    return new Response(result)
   }
 
-  return rewriter.on("*", new CryptoElemHandler(keyPair, ))
-      .transform(response)
+  return  new Response(html, {
+    headers: {'Content-Type': `text/html`}})
 }
