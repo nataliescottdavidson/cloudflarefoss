@@ -47,8 +47,7 @@ const html = `<!DOCTYPE html>
   </script>
 </html>`
 
-let signature;
-//very sketchy, global variable
+
 let rawMessage;
 //this should be factor-out-able to save in client, but im lazy
 
@@ -65,7 +64,7 @@ async function signMessage(hmacKey) {
   return signature;
 }
 
-async function verifyMessage(hmacKey) {
+async function verifyMessage(hmacKey, signature) {
   console.log(signature)
   let enc = new TextEncoder();
   let encoded = enc.encode(rawMessage);
@@ -96,11 +95,13 @@ async function handleRequest(request) {
   if (request.method == 'POST') {
     rawMessage = await request.text()
     let signature = await signMessage(key)
+    await NAT_TODO.put("sig", signature)
     return new Response(signature)
   }
   if (request.method == 'PUT') {
+    let signature = await NAT_TODO.get("sig")
     console.log(signature)
-    let result = await verifyMessage(key)
+    let result = await verifyMessage(key, signature)
     return new Response(result)
   }
 
