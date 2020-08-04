@@ -48,12 +48,7 @@ const html = `<!DOCTYPE html>
 </html>`
 
 
-let rawMessage;
-//this should be factor-out-able to save in client, but im lazy
-
-
-
-async function signMessage(hmacKey) {
+async function signMessage(hmacKey, rawMessage) {
   let enc = new TextEncoder();
   let encoded = enc.encode(rawMessage);
   let signature = await self.crypto.subtle.sign(
@@ -64,7 +59,9 @@ async function signMessage(hmacKey) {
   return signature;
 }
 
-async function verifyMessage(hmacKey, signature) {
+async function verifyMessage(hmacKey, rawMessage, signature) {
+  console.log(hmacKey)
+  console.log(rawMessage)
   console.log(signature)
   let enc = new TextEncoder();
   let encoded = enc.encode(rawMessage);
@@ -81,6 +78,17 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
+function str2ab(str) {
+  var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+  var bufView = new Uint16Array(buf);
+  for (var i=0, strLen=str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+function ab2str(buf) {
+  return String.fromCharCode.apply(null, new Uint16Array(buf));
+}
 
 async function handleRequest(request) {
   let key = await self.crypto.subtle.generateKey(
@@ -93,15 +101,22 @@ async function handleRequest(request) {
   );
 
   if (request.method == 'POST') {
-    rawMessage = await request.text()
-    let signature = await signMessage(key)
-    await NAT_TODO.put("sig", signature)
+    let rawMessage = await request.text()
+    let signature = await signMessage(key, rawMessage)
+    console.log(signature)
+    let strab = ab2str(signature)
+    console.log(strab)
+    await NAT_TODO.put("sig", strab)
+    await NAT_TODO.put("msg", rawMessage)
     return new Response(signature)
   }
   if (request.method == 'PUT') {
     let signature = await NAT_TODO.get("sig")
+    let rawMessage = await NAT_TODO.get("msg")
     console.log(signature)
-    let result = await verifyMessage(key, signature)
+    let abstr = str2ab(signature)
+    console.log(abstr)
+    let result = await verifyMessage(key, rawMessage, abstr)
     return new Response(result)
   }
 
